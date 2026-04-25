@@ -1,7 +1,9 @@
+import AVFoundation
 import SwiftUI
 
 struct ClipView: View {
     @EnvironmentObject private var vm: ClipViewModel
+    @StateObject private var rowPlayer = HistoryRowPlayer()
 
     var body: some View {
         ScrollView {
@@ -289,9 +291,14 @@ struct ClipView: View {
                     ForEach(vm.history) { entry in
                         HistoryRow(
                             entry: entry,
+                            isPlaying: rowPlayer.isPlaying(entry.id),
+                            onTogglePlay: { rowPlayer.toggle(entry: entry) },
                             onOpenFile: { vm.openFile(at: $0) },
                             onSendToBits: { vm.sendToBits(entry: entry) },
-                            onRemove: { vm.removeHistoryEntry(entry.id) }
+                            onRemove: {
+                                if rowPlayer.isPlaying(entry.id) { rowPlayer.stop() }
+                                vm.removeHistoryEntry(entry.id)
+                            }
                         )
                     }
                 }
@@ -304,29 +311,51 @@ struct ClipView: View {
 
 private struct HistoryRow: View {
     let entry: HistoryEntry
+    let isPlaying: Bool
+    let onTogglePlay: () -> Void
     let onOpenFile: (String) -> Void
     let onSendToBits: () -> Void
     let onRemove: () -> Void
 
+    private var hasMP3: Bool {
+        entry.producedPaths.contains(where: { $0.lowercased().hasSuffix(".mp3") })
+    }
+
     private var canSendToBits: Bool {
-        entry.status == .done
-        && !entry.sentToBits
-        && entry.producedPaths.contains(where: { $0.lowercased().hasSuffix(".mp3") })
+        entry.status == .done && !entry.sentToBits && hasMP3
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
+        HStack(alignment: .top, spacing: 12) {
+            Button(action: onTogglePlay) {
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(hasMP3 ? Color.white : Color.secondary)
+                    .frame(width: 26, height: 26)
+                    .background(
+                        Circle().fill(
+                            isPlaying ? Color.accentColor :
+                            hasMP3 ? Color.primary.opacity(0.85) : Color.secondary.opacity(0.18)
+                        )
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(!hasMP3)
+            .help(hasMP3 ? (isPlaying ? "Pause" : "Play") : "No audio for this entry")
+
             Text(formattedTimestamp(entry.timestamp))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
-                .frame(width: 120, alignment: .leading)
+                .frame(width: 110, alignment: .leading)
+                .padding(.top, 5)
 
             Text(entry.query ?? "")
                 .font(.callout)
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 3)
 
             if canSendToBits {
                 Button("Add to Playlist") { onSendToBits() }
@@ -377,6 +406,55 @@ private struct HistoryRow: View {
 private extension Color {
     static var separator: Color {
         Color(nsColor: .separatorColor)
+    }
+}
+
+// MARK: - Per-row audio player
+
+@MainActor
+final class HistoryRowPlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
+    @Published private(set) var playingId: UUID?
+    private var player: AVAudioPlayer?
+
+    func isPlaying(_ id: UUID) -> Bool { playingId == id }
+
+    func toggle(entry: HistoryEntry) {
+        guard let mp3 = entry.producedPaths.first(where: {
+            $0.lowercased().hasSuffix(".mp3")
+        }) else { return }
+
+        if playingId == entry.id, let p = player {
+            if p.isPlaying { p.pause(); playingId = nil }
+            else { p.play(); playingId = entry.id }
+            return
+        }
+        play(url: URL(fileURLWithPath: mp3), id: entry.id)
+    }
+
+    func stop() {
+        player?.stop()
+        player = nil
+        playingId = nil
+    }
+
+    private func play(url: URL, id: UUID) {
+        player?.stop()
+        do {
+            let p = try AVAudioPlayer(contentsOf: url)
+            p.delegate = self
+            p.prepareToPlay()
+            p.play()
+            self.player = p
+            self.playingId = id
+        } catch {
+            NSLog("[HistoryRowPlayer] play failed: \(error.localizedDescription)")
+        }
+    }
+
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor [weak self] in
+            self?.playingId = nil
+        }
     }
 }
 
