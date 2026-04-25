@@ -1,3 +1,4 @@
+import KeyboardShortcuts
 import SwiftUI
 
 struct SettingsView: View {
@@ -11,9 +12,11 @@ struct SettingsView: View {
         TabView {
             apiKeyTab
                 .tabItem { Label("API Key", systemImage: "key") }
+            quickCaptureTab
+                .tabItem { Label("Quick Capture", systemImage: "bolt") }
         }
         .padding(24)
-        .frame(width: 520, height: 340)
+        .frame(width: 520, height: 380)
         .onAppear {
             apiKey = Keychain.getOpenAIKey() ?? ""
         }
@@ -84,6 +87,42 @@ struct SettingsView: View {
                 Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)
                     .font(.callout)
+            }
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Quick Capture tab
+
+    private var quickCaptureTab: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Quick Capture Hotkey")
+                    .font(.headline)
+                Text("Highlight transcript text in your browser, press the hotkey, and ClipTalk saves a clip (up to 30s) straight to your bits library. Also available as a right-click Services menu item.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Form {
+                KeyboardShortcuts.Recorder("Shortcut:", name: .quickCapture)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Permissions required")
+                    .font(.subheadline.weight(.semibold))
+                Text("• Accessibility — to read the selected text")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Text("• Automation — to read the current tab URL from Chrome or Safari")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Text("macOS will prompt on first use. Grant both in System Settings → Privacy & Security.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer()

@@ -290,7 +290,8 @@ struct ClipView: View {
                         HistoryRow(
                             entry: entry,
                             onOpenFile: { vm.openFile(at: $0) },
-                            onSendToBits: { vm.sendToBits(entry: entry) }
+                            onSendToBits: { vm.sendToBits(entry: entry) },
+                            onRemove: { vm.removeHistoryEntry(entry.id) }
                         )
                     }
                 }
@@ -305,85 +306,55 @@ private struct HistoryRow: View {
     let entry: HistoryEntry
     let onOpenFile: (String) -> Void
     let onSendToBits: () -> Void
+    let onRemove: () -> Void
 
     private var canSendToBits: Bool {
-        entry.kind == .clip
-        && entry.status == .done
+        entry.status == .done
         && !entry.sentToBits
         && entry.producedPaths.contains(where: { $0.lowercased().hasSuffix(".mp3") })
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Circle()
-                .fill(entry.status == .done ? Color.primary : Color.red)
-                .frame(width: 7, height: 7)
-                .padding(.top, 7)
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(entry.kind.label.uppercased())
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .tracking(0.5)
-                    Text(entry.message)
-                        .font(.callout)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                    Spacer()
-                    if canSendToBits {
-                        Button("Send to Bits") { onSendToBits() }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
-                    } else if entry.sentToBits {
-                        Text("✓ in Bits")
-                            .font(.system(size: 11, weight: .semibold))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color.secondary.opacity(0.12))
-                            )
-                    }
-                }
-
-                if let q = entry.query, !q.isEmpty {
-                    Text("“\(q)”")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .italic()
-                        .lineLimit(1)
-                }
-
-                if !entry.producedPaths.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(entry.producedPaths, id: \.self) { path in
-                            Button {
-                                onOpenFile(path)
-                            } label: {
-                                Text((path as NSString).lastPathComponent)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 4)
-                                            .fill(Color.secondary.opacity(0.12))
-                                    )
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-
-            Spacer()
-
-            Text(relativeTime(entry.timestamp))
+        HStack(alignment: .top, spacing: 16) {
+            Text(formattedTimestamp(entry.timestamp))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
+                .frame(width: 120, alignment: .leading)
+
+            Text(entry.query ?? "")
+                .font(.callout)
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if canSendToBits {
+                Button("Add to Playlist") { onSendToBits() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            } else if entry.sentToBits {
+                Text("✓ in Playlist")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.secondary.opacity(0.12))
+                    )
+            }
+
+            Button {
+                onRemove()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Remove from history")
         }
         .padding(12)
         .background(
@@ -396,13 +367,9 @@ private struct HistoryRow: View {
         )
     }
 
-    private func relativeTime(_ date: Date) -> String {
+    private func formattedTimestamp(_ date: Date) -> String {
         let f = DateFormatter()
-        if Calendar.current.isDateInToday(date) {
-            f.dateFormat = "h:mm a"
-        } else {
-            f.dateFormat = "MMM d h:mm a"
-        }
+        f.dateFormat = "MMM d · h:mm a"
         return f.string(from: date)
     }
 }

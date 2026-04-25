@@ -57,13 +57,6 @@ private struct SidebarFooter: View {
             footerButton("Bits folder") {
                 NSWorkspace.shared.open(LibraryPaths.bitsDir)
             }
-            footerButton("Study book") {
-                let url = LibraryPaths.studyBook
-                if !FileManager.default.fileExists(atPath: url.path) {
-                    try? "".write(to: url, atomically: true, encoding: .utf8)
-                }
-                NSWorkspace.shared.open(url)
-            }
         }
         .padding(.bottom, 8)
         .onAppear(perform: refresh)

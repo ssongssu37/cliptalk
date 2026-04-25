@@ -29,5 +29,26 @@
 	</dict>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>ClipTalk reads the current tab URL from your browser so it can clip the highlighted transcript text from that video.</string>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Save to ClipTalk</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>saveToClipTalk</string>
+			<key>NSPortName</key>
+			<string>ClipTalk</string>
+			<key>NSSendTypes</key>
+			<array>
+				<string>NSStringPboardType</string>
+				<string>public.plain-text</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

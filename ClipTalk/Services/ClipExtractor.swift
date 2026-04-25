@@ -76,7 +76,8 @@ struct ClipExtractor {
     }
 
     /// Match `query` in captions and extract the matching audio range as MP3.
-    static func extract(url: String, query: String, saveFolder: URL) async throws -> ClipExtractResult {
+    /// Pass `maxDuration` to cap the clip length (keeps the start, truncates the end).
+    static func extract(url: String, query: String, saveFolder: URL, maxDuration: TimeInterval? = nil) async throws -> ClipExtractResult {
         guard let ffmpeg = ProcessRunner.locate("ffmpeg") else {
             throw ClipExtractorError.binaryMissing("ffmpeg")
         }
@@ -90,7 +91,10 @@ struct ClipExtractor {
 
         // Pad slightly so we don't clip words.
         let start = max(0, range.start - 0.3)
-        let end = range.end + 0.5
+        var end = range.end + 0.5
+        if let cap = maxDuration, end - start > cap {
+            end = start + cap
+        }
         let duration = end - start
 
         let outPath = outputURL(for: entry.title, start: start, end: end, saveFolder: saveFolder)

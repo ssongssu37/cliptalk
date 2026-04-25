@@ -52,7 +52,7 @@ struct StudyView: View {
                 .keyboardShortcut("t", modifiers: [])
             Button("") { vm.toggleClean() }
                 .keyboardShortcut("c", modifiers: [])
-            Button("") { vm.saveCurrentToStudyBook() }
+            Button("") { vm.toggleFavoriteCurrent() }
                 .keyboardShortcut("s", modifiers: [])
         }
         .frame(width: 0, height: 0)
@@ -128,9 +128,9 @@ struct StudyView: View {
                              systemImage: "sparkles") { vm.toggleClean() }
                 actionDivider
                 actionButton(vm.justSaved ? "✓ Saved" : "Save",
-                             systemImage: "bookmark.fill",
+                             systemImage: vm.justSaved ? "star.fill" : "star",
                              highlight: vm.justSaved) {
-                    vm.saveCurrentToStudyBook()
+                    vm.toggleFavoriteCurrent()
                 }
             }
         }

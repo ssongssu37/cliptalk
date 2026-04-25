@@ -5,13 +5,15 @@ import SwiftUI
 enum SidebarItem: String, CaseIterable, Identifiable {
     case study
     case newClip
+    case studyBook
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .study: return "Study"
+        case .study: return "Playlist"
         case .newClip: return "New clip"
+        case .studyBook: return "Study Book"
         }
     }
 
@@ -19,6 +21,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         switch self {
         case .study: return "book.pages"
         case .newClip: return "plus.rectangle"
+        case .studyBook: return "text.book.closed"
         }
     }
 }
@@ -36,6 +39,8 @@ struct ContentView: View {
                 StudyView()
             case .newClip:
                 ClipView()
+            case .studyBook:
+                StudyBookView()
             }
         }
     }

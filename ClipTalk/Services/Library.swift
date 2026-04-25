@@ -17,6 +17,14 @@ enum LibraryPaths {
         return dir
     }
 
+    /// Auto-updated CLI binaries (currently just yt-dlp). Bootstrapped by
+    /// `BinarySetup` from the bundled copy on first launch.
+    static var binDir: URL {
+        let dir = supportDir.appendingPathComponent("bin", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
     /// Single text file collecting saved quotes.
     static var studyBook: URL {
         supportDir.appendingPathComponent("study-book.txt")

@@ -63,13 +63,21 @@ struct ProcessRunner {
         }
     }
 
-    /// First existing path wins. Lets the app keep working when Homebrew
-    /// lives at /usr/local (Intel) or /opt/homebrew (Apple Silicon).
+    /// First existing executable path wins. Lookup order:
+    ///   1. ~/Library/Application Support/ClipTalk/bin/  (auto-updated yt-dlp lives here)
+    ///   2. ClipTalk.app/Contents/Resources/bin/        (the bundled copy that ships with the app)
+    ///   3. Homebrew (Intel /usr/local, Apple Silicon /opt/homebrew) — dev fallback
     static func locate(_ binary: String) -> String? {
+        let appSupport = LibraryPaths.binDir.appendingPathComponent(binary).path
+        let bundled = Bundle.main.resourceURL?
+            .appendingPathComponent("bin", isDirectory: true)
+            .appendingPathComponent(binary).path
         let candidates = [
+            appSupport,
+            bundled ?? "",
             "/usr/local/bin/\(binary)",
             "/opt/homebrew/bin/\(binary)",
         ]
-        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+        return candidates.first { !$0.isEmpty && FileManager.default.isExecutableFile(atPath: $0) }
     }
 }

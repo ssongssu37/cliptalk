@@ -7,6 +7,10 @@ import SwiftUI
 @MainActor
 final class ClipViewModel: ObservableObject {
 
+    /// Shared reference so Quick Capture (fire-and-forget from Services / hotkey)
+    /// can append into history. Set in `init`; lives for the app's lifetime.
+    static weak var shared: ClipViewModel?
+
     // URL and query persist across view recreation and app restarts.
     @Published var urlInput: String = UserDefaults.standard.string(forKey: "ct.clip.url") ?? ""
     @Published var clipQuery: String = UserDefaults.standard.string(forKey: "ct.clip.query") ?? ""
@@ -18,6 +22,8 @@ final class ClipViewModel: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
 
     init() {
+        ClipViewModel.shared = self
+
         $urlInput
             .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
             .sink { value in
@@ -31,6 +37,45 @@ final class ClipViewModel: ObservableObject {
                 UserDefaults.standard.set(value, forKey: "ct.clip.query")
             }
             .store(in: &cancellables)
+    }
+
+    // MARK: - Quick Capture entry points (called by QuickClipper)
+
+    /// Record a successful Quick Capture (hotkey / Services) in history.
+    /// Marks `sentToBits = true` because quick-capture writes straight to bits/.
+    func recordQuickCaptureSuccess(url: String, text: String, outputPath: URL, message: String) {
+        let entry = HistoryEntry(
+            id: UUID(),
+            timestamp: Date(),
+            kind: .clip,
+            status: .done,
+            message: message,
+            url: url,
+            query: text,
+            producedPaths: [outputPath.path],
+            sentToBits: true
+        )
+        history.insert(entry, at: 0)
+        if history.count > 200 { history = Array(history.prefix(200)) }
+        HistoryStore.save(history)
+    }
+
+    /// Record a failed Quick Capture (no text, no URL, extract error, etc.).
+    func recordQuickCaptureFailure(url: String, text: String?, message: String) {
+        let entry = HistoryEntry(
+            id: UUID(),
+            timestamp: Date(),
+            kind: .clip,
+            status: .error,
+            message: message,
+            url: url,
+            query: text,
+            producedPaths: [],
+            sentToBits: false
+        )
+        history.insert(entry, at: 0)
+        if history.count > 200 { history = Array(history.prefix(200)) }
+        HistoryStore.save(history)
     }
 
     // MARK: - Folder controls
@@ -246,6 +291,11 @@ final class ClipViewModel: ObservableObject {
 
     func clearHistory() {
         history = []
+        HistoryStore.save(history)
+    }
+
+    func removeHistoryEntry(_ entryId: UUID) {
+        history.removeAll { $0.id == entryId }
         HistoryStore.save(history)
     }
 

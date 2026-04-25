@@ -20,6 +20,12 @@ final class StudyViewModel: NSObject, ObservableObject {
     @Published var showingClean = false
     @Published var justSaved = false
     @Published var toast: String?
+    @Published private(set) var favorites: Set<String> = FavoritesStore.load()
+
+    var isCurrentFavorited: Bool {
+        guard let id = currentBit?.id else { return false }
+        return favorites.contains(id)
+    }
 
     // MARK: - Private
 
@@ -92,20 +98,13 @@ final class StudyViewModel: NSObject, ObservableObject {
     func hideClean() { showingClean = false }
     func toggleClean() { showingClean.toggle() }
 
-    func saveCurrentToStudyBook() {
+    /// Toggle whether the current bit is in the Study Book favorites list.
+    func toggleFavoriteCurrent() {
         guard let bit = currentBit else { return }
-        var parts: [String] = []
-        if !bit.transcript.isEmpty {
-            parts.append(bit.transcript)
-        } else {
-            parts.append("(no transcript)  \(bit.id)")
-        }
-        if !bit.cleanEnglish.isEmpty {
-            parts.append("→ \(bit.cleanEnglish)")
-        }
-        Library.appendToStudyBook(parts.joined(separator: "\n"))
-        justSaved = true
-        flash("Added to study book")
+        let nowFavorited = FavoritesStore.toggle(bit.id)
+        favorites = FavoritesStore.load()
+        justSaved = nowFavorited
+        flash(nowFavorited ? "Saved to Study Book" : "Removed from Study Book")
     }
 
     func removeCurrentBit() {
@@ -127,7 +126,8 @@ final class StudyViewModel: NSObject, ObservableObject {
 
         // Leave showingText / showingClean sticky — if the user opened them,
         // they stay open across Next so they can read along with each new clip.
-        justSaved = false
+        // `justSaved` reflects favorite state of the new bit.
+        justSaved = FavoritesStore.isFavorited(bit.id)
 
         do {
             let player = try AVAudioPlayer(contentsOf: bit.audioURL)

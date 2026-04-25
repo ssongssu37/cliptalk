@@ -19,3 +19,11 @@ Carthage/
 
 # Secrets
 .env
+
+# Vendored binaries — fetched by scripts/fetch-binaries.sh
+ClipTalk/Resources/bin/yt-dlp
+ClipTalk/Resources/bin/ffmpeg
+
+# Build artifacts
+release/
+*.dmg
