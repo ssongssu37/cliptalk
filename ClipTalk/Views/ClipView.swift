@@ -4,14 +4,14 @@ import SwiftUI
 struct ClipView: View {
     @EnvironmentObject private var vm: ClipViewModel
     @StateObject private var rowPlayer = HistoryRowPlayer()
+    @State private var editingBit: Bit?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 header
-                folderRow
                 urlSection
-                actionsGrid
+                clipByTextPanel
                 if !vm.activeJobs.isEmpty {
                     activeJobsPanel
                 }
@@ -24,6 +24,11 @@ struct ClipView: View {
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .sheet(item: $editingBit) { bit in
+            EditBitView(bit: bit) {
+                rowPlayer.stop()  // file changed; drop any cached player state
+            }
+        }
         .overlay(alignment: .bottom) {
             if let toast = vm.toast {
                 Text(toast)
@@ -43,37 +48,11 @@ struct ClipView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("New clip")
+            Text("Add Clip")
                 .font(.largeTitle.bold())
-            Text("Download from YouTube, or extract a precise clip by pasting transcript text.")
+            Text("Paste a YouTube URL and a line from its transcript — saves just that audio clip to your Playlist.")
                 .foregroundStyle(.secondary)
             Divider().padding(.top, 12)
-        }
-    }
-
-    // MARK: - Save folder row
-
-    private var folderRow: some View {
-        HStack(spacing: 10) {
-            Text("Saving to")
-                .foregroundStyle(.secondary)
-                .font(.callout)
-            Text(vm.saveFolder.path)
-                .font(.system(.callout, design: .monospaced))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.secondary.opacity(0.1))
-                )
-                .lineLimit(1)
-                .truncationMode(.middle)
-
-            Button("Change") { vm.pickFolder() }
-                .buttonStyle(.link)
-            Button("Open") { vm.openSaveFolderInFinder() }
-                .buttonStyle(.link)
-            Spacer()
         }
     }
 
@@ -117,34 +96,7 @@ struct ClipView: View {
         }
     }
 
-    // MARK: - Download + Clip-by-text panels
-
-    private var actionsGrid: some View {
-        HStack(alignment: .top, spacing: 20) {
-            downloadPanel
-            clipByTextPanel
-        }
-    }
-
-    private var downloadPanel: some View {
-        panelContainer {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Download")
-                    .font(.system(size: 16, weight: .semibold))
-                Text("Save the full video as audio or text.")
-                    .foregroundStyle(.secondary)
-                    .font(.callout)
-
-                Spacer(minLength: 8)
-
-                HStack(spacing: 8) {
-                    downloadButton("MP3", kind: .mp3, primary: false)
-                    downloadButton("Transcript", kind: .transcript, primary: false)
-                    downloadButton("Both", kind: .both, primary: true)
-                }
-            }
-        }
-    }
+    // MARK: - Clip-by-text panel
 
     private var clipByTextPanel: some View {
         panelContainer {
@@ -216,25 +168,6 @@ struct ClipView: View {
             .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
     }
 
-    @ViewBuilder
-    private func downloadButton(_ label: String, kind: DownloadKind, primary: Bool) -> some View {
-        let button = Button {
-            vm.download(kind: kind)
-        } label: {
-            Text(label)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-        }
-        .controlSize(.large)
-        .disabled(vm.urlInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-        if primary {
-            button.buttonStyle(.borderedProminent)
-        } else {
-            button.buttonStyle(.bordered)
-        }
-    }
-
     // MARK: - Active jobs
 
     private var activeJobsPanel: some View {
@@ -258,7 +191,32 @@ struct ClipView: View {
         )
     }
 
-    // MARK: - History
+    // MARK: - History (clip-by-text + quick capture only)
+
+    private var clipHistory: [HistoryEntry] {
+        vm.history.filter { $0.kind == .clip }
+    }
+
+    /// Construct a transient `Bit` from a history entry's MP3 path so the
+    /// edit sheet can operate on it directly. Returns nil if the file is
+    /// gone or the entry has no MP3.
+    private func bitFromEntry(_ entry: HistoryEntry) -> Bit? {
+        guard let mp3 = entry.producedPaths.first(where: {
+            $0.lowercased().hasSuffix(".mp3")
+        }) else { return nil }
+        let url = URL(fileURLWithPath: mp3)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let stem = url.deletingPathExtension().lastPathComponent
+        let dir = url.deletingLastPathComponent()
+        let txt = dir.appendingPathComponent("\(stem).txt")
+        let clean = dir.appendingPathComponent("\(stem).clean.txt")
+        return Bit(
+            id: stem,
+            audioURL: url,
+            transcriptURL: FileManager.default.fileExists(atPath: txt.path) ? txt : nil,
+            cleanURL: FileManager.default.fileExists(atPath: clean.path) ? clean : nil
+        )
+    }
 
     private var historySection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -266,35 +224,39 @@ struct ClipView: View {
                 Text("History")
                     .font(.system(size: 14, weight: .semibold))
                 Spacer()
-                Button("Clear") { vm.clearHistory() }
-                    .buttonStyle(.link)
-                    .disabled(vm.history.isEmpty)
             }
             .padding(.bottom, 4)
             Divider()
 
-            if vm.history.isEmpty {
+            if clipHistory.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 26))
                         .foregroundStyle(.tertiary)
-                    Text("No history yet.")
+                    Text("No clips yet.")
                         .foregroundStyle(.secondary)
-                    Text("Your downloads and clips will appear here.")
+                    Text("Highlight YouTube transcript text and press ⌥Z, or paste text above and click Extract.")
                         .font(.footnote)
                         .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
             } else {
                 LazyVStack(spacing: 8) {
-                    ForEach(vm.history) { entry in
+                    ForEach(clipHistory) { entry in
                         HistoryRow(
                             entry: entry,
                             isPlaying: rowPlayer.isPlaying(entry.id),
                             onTogglePlay: { rowPlayer.toggle(entry: entry) },
                             onOpenFile: { vm.openFile(at: $0) },
                             onSendToBits: { vm.sendToBits(entry: entry) },
+                            onEdit: {
+                                if rowPlayer.isPlaying(entry.id) { rowPlayer.stop() }
+                                if let bit = bitFromEntry(entry) {
+                                    editingBit = bit
+                                }
+                            },
                             onRemove: {
                                 if rowPlayer.isPlaying(entry.id) { rowPlayer.stop() }
                                 vm.removeHistoryEntry(entry.id)
@@ -315,6 +277,7 @@ private struct HistoryRow: View {
     let onTogglePlay: () -> Void
     let onOpenFile: (String) -> Void
     let onSendToBits: () -> Void
+    let onEdit: () -> Void
     let onRemove: () -> Void
 
     private var hasMP3: Bool {
@@ -334,8 +297,8 @@ private struct HistoryRow: View {
                     .frame(width: 26, height: 26)
                     .background(
                         Circle().fill(
-                            isPlaying ? Color.accentColor :
-                            hasMP3 ? Color.primary.opacity(0.85) : Color.secondary.opacity(0.18)
+                            !hasMP3 ? Color.secondary.opacity(0.18) :
+                            isPlaying ? Color.accentColor.opacity(0.7) : Color.accentColor
                         )
                     )
             }
@@ -371,6 +334,18 @@ private struct HistoryRow: View {
                         RoundedRectangle(cornerRadius: 4)
                             .fill(Color.secondary.opacity(0.12))
                     )
+            }
+
+            if hasMP3 {
+                Button(action: onEdit) {
+                    Image(systemName: "scissors")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Trim this clip")
             }
 
             Button {

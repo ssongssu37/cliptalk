@@ -2,6 +2,7 @@ import SwiftUI
 
 struct StudyView: View {
     @EnvironmentObject private var vm: StudyViewModel
+    @State private var editingBit: Bit?
 
     var body: some View {
         ScrollView {
@@ -13,8 +14,8 @@ struct StudyView: View {
                     if vm.showingText || vm.showingClean {
                         transcriptCard
                     }
-                    removeRow
                     shortcutHints
+                    bitListSection
                 } else {
                     emptyState
                 }
@@ -24,6 +25,11 @@ struct StudyView: View {
             .frame(maxWidth: .infinity, alignment: .center)
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .sheet(item: $editingBit) { bit in
+            EditBitView(bit: bit) {
+                vm.loadBits()
+            }
+        }
         .overlay(alignment: .bottom) {
             if let toast = vm.toast {
                 Text(toast)
@@ -63,13 +69,25 @@ struct StudyView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Study")
-                .font(.largeTitle.bold())
+            HStack(alignment: .firstTextBaseline) {
+                Text("Playlist")
+                    .font(.largeTitle.bold())
+                Spacer()
+                if vm.hasBits {
+                    Toggle(isOn: $vm.randomMode) {
+                        Text("Shuffle")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                }
+            }
             if vm.hasBits {
-                Text("\(vm.bitCount) clip\(vm.bitCount == 1 ? "" : "s") in your library · press Play for a random one")
+                Text("\(vm.bitCount) clip\(vm.bitCount == 1 ? "" : "s") in your library")
                     .foregroundStyle(.secondary)
             } else {
-                Text("Random-play your clip library. Reveal the transcript, save favorites to the study book.")
+                Text("Save clips here, replay them, mark favorites for the Study Book.")
                     .foregroundStyle(.secondary)
             }
             Divider().padding(.top, 12)
@@ -78,17 +96,13 @@ struct StudyView: View {
 
     private var playerCard: some View {
         VStack(spacing: 20) {
-            // Heading
-            VStack(spacing: 6) {
-                Text("Listen up.")
-                    .font(.system(size: 26, weight: .bold))
-                Text(vm.currentBit?.prettyTitle ?? "Press Play to start")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            .padding(.top, 32)
+            // Current bit title (only)
+            Text(vm.currentBit?.prettyTitle ?? "Press Play to start")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .padding(.top, 32)
 
             // Big circular play button
             Button {
@@ -96,8 +110,8 @@ struct StudyView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(.black)
-                        .shadow(color: .black.opacity(0.25), radius: 16, y: 6)
+                        .fill(Color.accentColor)
+                        .shadow(color: Color.accentColor.opacity(0.35), radius: 16, y: 6)
                     Image(systemName: vm.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 36, weight: .medium))
                         .foregroundStyle(.white)
@@ -128,7 +142,7 @@ struct StudyView: View {
                              systemImage: "sparkles") { vm.toggleClean() }
                 actionDivider
                 actionButton(vm.justSaved ? "✓ Saved" : "Save",
-                             systemImage: vm.justSaved ? "star.fill" : "star",
+                             systemImage: vm.justSaved ? "bookmark.fill" : "bookmark",
                              highlight: vm.justSaved) {
                     vm.toggleFavoriteCurrent()
                 }
@@ -164,7 +178,7 @@ struct StudyView: View {
             .foregroundStyle(highlight ? Color.white : Color.primary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(highlight ? Color.black : Color.clear)
+            .background(highlight ? Color.accentColor : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -233,6 +247,107 @@ struct StudyView: View {
             .disabled(vm.currentBit == nil)
             Spacer()
         }
+    }
+
+    private var bitListSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("All clips")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .tracking(0.5)
+                Spacer()
+                Text("\(vm.bitCount)")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
+            }
+            Divider()
+
+            LazyVStack(spacing: 6) {
+                ForEach(vm.bits) { bit in
+                    bitRow(bit)
+                }
+            }
+        }
+        .padding(.top, 12)
+    }
+
+    private func bitRow(_ bit: Bit) -> some View {
+        let isCurrent = vm.currentBitId == bit.id
+        return HStack(spacing: 12) {
+            Button {
+                vm.playBit(id: bit.id)
+            } label: {
+                Image(systemName: isCurrent && vm.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 22, height: 22)
+                    .background(Circle().fill(Color.accentColor))
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                vm.playBit(id: bit.id)
+            } label: {
+                Text(displayLabel(bit))
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .multilineTextAlignment(.leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if vm.favorites.contains(bit.id) {
+                Image(systemName: "bookmark.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.accentColor)
+            }
+
+            Button {
+                editingBit = bit
+            } label: {
+                Image(systemName: "scissors")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Trim this clip")
+
+            Button {
+                vm.removeBit(id: bit.id)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Remove from playlist")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isCurrent
+                      ? Color.accentColor.opacity(0.10)
+                      : Color(nsColor: .textBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(isCurrent ? Color.accentColor.opacity(0.4) : Color.separator, lineWidth: 1)
+        )
+    }
+
+    private func displayLabel(_ bit: Bit) -> String {
+        let t = bit.transcript
+        if !t.isEmpty { return t }
+        return bit.prettyTitle
     }
 
     private var shortcutHints: some View {
@@ -308,18 +423,18 @@ private struct Scrubber: View {
                     // Track
                     Capsule()
                         .fill(Color.secondary.opacity(0.2))
-                        .frame(height: isDragging ? 6 : 4)
+                        .frame(height: isDragging ? 12 : 8)
 
                     // Fill
                     Capsule()
-                        .fill(Color.primary)
-                        .frame(width: geo.size.width * fraction, height: isDragging ? 6 : 4)
+                        .fill(Color.accentColor)
+                        .frame(width: geo.size.width * fraction, height: isDragging ? 12 : 8)
 
                     // Thumb
                     Circle()
-                        .fill(Color.primary)
-                        .frame(width: isDragging ? 14 : 12, height: isDragging ? 14 : 12)
-                        .offset(x: geo.size.width * fraction - (isDragging ? 7 : 6))
+                        .fill(Color.accentColor)
+                        .frame(width: isDragging ? 18 : 16, height: isDragging ? 18 : 16)
+                        .offset(x: geo.size.width * fraction - (isDragging ? 9 : 8))
                 }
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())

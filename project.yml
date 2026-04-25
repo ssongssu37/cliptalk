@@ -60,6 +60,14 @@ targets:
             NSSendTypes:
               - NSStringPboardType
               - public.plain-text
+          - NSMenuItem:
+              default: "Download from ClipTalk"
+            NSMessage: downloadFromClipTalk
+            NSPortName: ClipTalk
+            NSSendTypes:
+              - NSStringPboardType
+              - public.plain-text
+              - public.url
     entitlements:
       path: ClipTalk/ClipTalk.entitlements
       properties:

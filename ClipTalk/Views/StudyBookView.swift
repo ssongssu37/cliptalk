@@ -101,7 +101,7 @@ private struct StudyBookRow: View {
                     .foregroundStyle(.white)
                     .frame(width: 32, height: 32)
                     .background(
-                        Circle().fill(isPlaying ? Color.accentColor : Color.primary.opacity(0.85))
+                        Circle().fill(isPlaying ? Color.accentColor.opacity(0.7) : Color.accentColor)
                     )
             }
             .buttonStyle(.plain)

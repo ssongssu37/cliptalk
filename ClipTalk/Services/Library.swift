@@ -25,6 +25,16 @@ enum LibraryPaths {
         return dir
     }
 
+    /// Untouched MP3 backups, snapshotted before the first trim so the user
+    /// can restore the original audio later. Hidden so it doesn't show up
+    /// when they open `bitsDir` in Finder.
+    static var originalsDir: URL {
+        let dir = supportDir.appendingPathComponent("bits", isDirectory: true)
+            .appendingPathComponent(".originals", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
     /// Single text file collecting saved quotes.
     static var studyBook: URL {
         supportDir.appendingPathComponent("study-book.txt")
@@ -81,6 +91,85 @@ enum Library {
             }
         }
         return removed
+    }
+
+    /// Path of the untouched-original backup for a given bit id, if one exists.
+    static func originalBackupURL(forBitId id: String) -> URL? {
+        let url = LibraryPaths.originalsDir.appendingPathComponent("\(id).mp3")
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    static func hasOriginalBackup(forBitId id: String) -> Bool {
+        originalBackupURL(forBitId: id) != nil
+    }
+
+    /// Restore the bit's audio from the backup made on the first trim.
+    /// Returns true on success.
+    @discardableResult
+    static func restoreOriginal(_ bit: Bit) -> Bool {
+        guard let backup = originalBackupURL(forBitId: bit.id) else { return false }
+        let dst = bit.audioURL
+        do {
+            // Replace existing file atomically.
+            let tmp = dst.deletingLastPathComponent()
+                .appendingPathComponent("\(bit.id).restore-\(UUID().uuidString.prefix(6)).mp3")
+            try FileManager.default.copyItem(at: backup, to: tmp)
+            _ = try FileManager.default.replaceItemAt(dst, withItemAt: tmp)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Snapshot the bit's MP3 into `originalsDir` if no backup exists yet.
+    /// Cheap copy; ffmpeg won't run before this.
+    private static func ensureOriginalBackup(_ bit: Bit) {
+        let dst = LibraryPaths.originalsDir.appendingPathComponent("\(bit.id).mp3")
+        guard !FileManager.default.fileExists(atPath: dst.path) else { return }
+        try? FileManager.default.copyItem(at: bit.audioURL, to: dst)
+    }
+
+    /// Trim an MP3 to [start, end] (in seconds) via ffmpeg, atomically
+    /// replacing the original file. Returns true on success.
+    /// Caller should reload bits after this.
+    @discardableResult
+    static func trimBit(_ bit: Bit, start: TimeInterval, end: TimeInterval) async -> Bool {
+        guard end - start >= 0.1 else { return false }
+        guard let ffmpeg = ProcessRunner.locate("ffmpeg") else { return false }
+
+        // Snapshot the untouched original the first time we trim.
+        ensureOriginalBackup(bit)
+
+        let src = bit.audioURL
+        let tmp = src.deletingLastPathComponent()
+            .appendingPathComponent("\(bit.id).trim-\(UUID().uuidString.prefix(6)).mp3")
+
+        let result = await ProcessRunner.run(
+            executable: ffmpeg,
+            args: [
+                "-hide_banner", "-loglevel", "error",
+                "-ss", String(format: "%.3f", start),
+                "-to", String(format: "%.3f", end),
+                "-i", src.path,
+                "-c:a", "libmp3lame",
+                "-q:a", "2",
+                "-y",
+                tmp.path,
+            ]
+        )
+        guard result.ok else {
+            try? FileManager.default.removeItem(at: tmp)
+            return false
+        }
+
+        // Atomic replace
+        do {
+            _ = try FileManager.default.replaceItemAt(src, withItemAt: tmp)
+            return true
+        } catch {
+            try? FileManager.default.removeItem(at: tmp)
+            return false
+        }
     }
 
     /// Append a block of text to study-book.txt followed by a blank line.

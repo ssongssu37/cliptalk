@@ -21,11 +21,16 @@ final class StudyViewModel: NSObject, ObservableObject {
     @Published var justSaved = false
     @Published var toast: String?
     @Published private(set) var favorites: Set<String> = FavoritesStore.load()
+    @Published var randomMode: Bool = UserDefaults.standard.object(forKey: "ct.study.random") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(randomMode, forKey: "ct.study.random") }
+    }
 
     var isCurrentFavorited: Bool {
         guard let id = currentBit?.id else { return false }
         return favorites.contains(id)
     }
+
+    var currentBitId: String? { currentBit?.id }
 
     // MARK: - Private
 
@@ -45,18 +50,34 @@ final class StudyViewModel: NSObject, ObservableObject {
 
     // MARK: - Playback
 
-    /// Pick a fresh random bit and start it. Used for both initial Play and Next.
+    /// Advance to the next bit. Random or sequential based on `randomMode`.
     func playRandom() {
-        loadBits()  // refresh in case new bits were added
+        loadBits()
         guard !bits.isEmpty else { return }
 
-        var idx = Int.random(in: 0..<bits.count)
-        if bits.count > 1, let last = lastIndex {
-            // Avoid repeating the same bit twice in a row
-            while idx == last {
-                idx = Int.random(in: 0..<bits.count)
+        let idx: Int
+        if randomMode {
+            var pick = Int.random(in: 0..<bits.count)
+            if bits.count > 1, let last = lastIndex {
+                while pick == last { pick = Int.random(in: 0..<bits.count) }
+            }
+            idx = pick
+        } else {
+            // Sequential: next after lastIndex, or 0 if first time / fell off the end.
+            if let last = lastIndex, last + 1 < bits.count {
+                idx = last + 1
+            } else {
+                idx = 0
             }
         }
+        lastIndex = idx
+        play(bit: bits[idx])
+    }
+
+    /// Play a specific bit by id (used by the bottom list).
+    func playBit(id: String) {
+        loadBits()
+        guard let idx = bits.firstIndex(where: { $0.id == id }) else { return }
         lastIndex = idx
         play(bit: bits[idx])
     }
@@ -109,14 +130,24 @@ final class StudyViewModel: NSObject, ObservableObject {
 
     func removeCurrentBit() {
         guard let bit = currentBit else { return }
+        removeBit(id: bit.id)
+    }
+
+    /// Remove a bit by id (used by the bit-list X button + the player Remove button).
+    func removeBit(id: String) {
+        guard let bit = bits.first(where: { $0.id == id }) else { return }
         Library.removeBit(bit)
-        stop()
-        currentBit = nil
-        showingText = false
-        showingClean = false
-        justSaved = false
+        FavoritesStore.remove(id)
+        if currentBit?.id == id {
+            stop()
+            currentBit = nil
+            showingText = false
+            showingClean = false
+            justSaved = false
+        }
         loadBits()
-        flash("Removed from bits")
+        favorites = FavoritesStore.load()
+        flash("Removed from playlist")
     }
 
     // MARK: - Private playback helpers

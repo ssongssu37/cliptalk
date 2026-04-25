@@ -6,14 +6,16 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     case study
     case newClip
     case studyBook
+    case download
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .study: return "Playlist"
-        case .newClip: return "New clip"
+        case .newClip: return "Add Clip"
         case .studyBook: return "Study Book"
+        case .download: return "Download"
         }
     }
 
@@ -22,6 +24,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .study: return "book.pages"
         case .newClip: return "plus.rectangle"
         case .studyBook: return "text.book.closed"
+        case .download: return "arrow.down.circle"
         }
     }
 }
@@ -41,6 +44,8 @@ struct ContentView: View {
                 ClipView()
             case .studyBook:
                 StudyBookView()
+            case .download:
+                DownloadView()
             }
         }
     }

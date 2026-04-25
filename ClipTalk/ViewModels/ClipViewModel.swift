@@ -39,6 +39,47 @@ final class ClipViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    // MARK: - Download via Service (right-click selected URL)
+
+    /// Triggered by the "Download from ClipTalk" Service. Bypasses the URL
+    /// field — the URL was selected by the user. Fires a notification on
+    /// finish since the user might be in another app.
+    func downloadFromService(url: String, kind: DownloadKind) {
+        let folder = saveFolder
+        let jobLabel = "\(kind.label) · \(shortURL(url))"
+        activeJobs.append(jobLabel)
+        flash("Downloading \(kind.label)…")
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let outcome = try await DownloadService.run(url: url, kind: kind, saveFolder: folder)
+                await MainActor.run {
+                    self.recordSuccess(kind: self.historyKind(for: kind),
+                                       message: outcome.message,
+                                       url: url,
+                                       paths: outcome.paths,
+                                       query: nil)
+                    self.flash(outcome.message)
+                    self.activeJobs.removeAll { $0 == jobLabel }
+                }
+                ServiceNotifications.post(title: "Download complete",
+                                          body: "\(kind.label) saved to \(folder.lastPathComponent)")
+            } catch {
+                await MainActor.run {
+                    self.recordFailure(kind: self.historyKind(for: kind),
+                                       message: error.localizedDescription,
+                                       url: url)
+                    self.flash(error.localizedDescription, isError: true)
+                    self.activeJobs.removeAll { $0 == jobLabel }
+                }
+                ServiceNotifications.post(title: "Download failed",
+                                          body: error.localizedDescription,
+                                          isError: true)
+            }
+        }
+    }
+
     // MARK: - Quick Capture entry points (called by QuickClipper)
 
     /// Record a successful Quick Capture (hotkey / Services) in history.

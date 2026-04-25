@@ -10,6 +10,59 @@ import Foundation
 /// URL and hand off to QuickClipper.
 final class ServiceProvider: NSObject {
 
+    /// Service: highlight a YouTube URL anywhere → right-click → Download from
+    /// ClipTalk. Pops a small picker so the user can choose MP3 / Transcript /
+    /// Both, then runs `DownloadService` against the Download page's save folder.
+    @objc func downloadFromClipTalk(_ pboard: NSPasteboard, userData: String?, error errorPointer: AutoreleasingUnsafeMutablePointer<NSString>) {
+        guard let raw = pboard.string(forType: .string) else {
+            errorPointer.pointee = "No URL selected." as NSString
+            return
+        }
+        let url = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isYouTubeURL(url) else {
+            errorPointer.pointee = "Selection isn't a YouTube URL." as NSString
+            return
+        }
+
+        DispatchQueue.main.async {
+            // Bring the app forward so the alert isn't hidden behind another window.
+            NSApp.activate(ignoringOtherApps: true)
+
+            let alert = NSAlert()
+            alert.messageText = "Download from YouTube"
+            alert.informativeText = self.shortenURL(url)
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "Both")          // .alertFirstButtonReturn   (default)
+            alert.addButton(withTitle: "MP3")           // .alertSecondButtonReturn
+            alert.addButton(withTitle: "Transcript")    // .alertThirdButtonReturn
+            alert.addButton(withTitle: "Cancel")
+
+            let response = alert.runModal()
+            let kind: DownloadKind?
+            switch response {
+            case .alertFirstButtonReturn:  kind = .both
+            case .alertSecondButtonReturn: kind = .mp3
+            case .alertThirdButtonReturn:  kind = .transcript
+            default:                        kind = nil
+            }
+
+            guard let kind else { return }
+            ClipViewModel.shared?.downloadFromService(url: url, kind: kind)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func isYouTubeURL(_ s: String) -> Bool {
+        guard let host = URL(string: s)?.host?.lowercased() else { return false }
+        return host.contains("youtube.com") || host.contains("youtu.be")
+    }
+
+    private func shortenURL(_ s: String) -> String {
+        if s.count <= 80 { return s }
+        return String(s.prefix(77)) + "…"
+    }
+
     /// Bridge target matching the NSMessage declared in Info.plist.
     /// Selector signature is fixed by AppKit.
     @objc func saveToClipTalk(_ pboard: NSPasteboard, userData: String?, error errorPointer: AutoreleasingUnsafeMutablePointer<NSString>) {
