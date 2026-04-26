@@ -3,6 +3,7 @@ import SwiftUI
 struct StudyView: View {
     @EnvironmentObject private var vm: StudyViewModel
     @State private var editingBit: Bit?
+    @State private var showingMixtape = false
 
     var body: some View {
         ScrollView {
@@ -29,6 +30,12 @@ struct StudyView: View {
             EditBitView(bit: bit) {
                 vm.loadBits()
             }
+        }
+        .sheet(isPresented: $showingMixtape) {
+            MixtapeExportView(
+                allBits: vm.bits,
+                favoritedBits: vm.bits.filter { vm.favorites.contains($0.id) }
+            )
         }
         .overlay(alignment: .bottom) {
             if let toast = vm.toast {
@@ -68,19 +75,21 @@ struct StudyView: View {
     // MARK: - Sub-views
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
                 Text("Playlist")
                     .font(.largeTitle.bold())
                 Spacer()
                 if vm.hasBits {
                     Toggle(isOn: $vm.randomMode) {
                         Text("Shuffle")
-                            .font(.callout)
+                            .font(.title3)
                             .foregroundStyle(.secondary)
                     }
                     .toggleStyle(.switch)
-                    .controlSize(.small)
+                    .controlSize(.large)
+                    .scaleEffect(1.3)
+                    .padding(.trailing, 6)
                 }
             }
             if vm.hasBits {
@@ -90,8 +99,49 @@ struct StudyView: View {
                 Text("Save clips here, replay them, mark favorites for the Study Book.")
                     .foregroundStyle(.secondary)
             }
-            Divider().padding(.top, 12)
+
+            if vm.hasBits {
+                mixtapeBanner
+            }
+
+            Divider()
         }
+    }
+
+    private var mixtapeBanner: some View {
+        Button {
+            showingMixtape = true
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 22, weight: .semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Export to mixtape")
+                        .font(.system(size: 17, weight: .semibold))
+                    Text("Combine your clips into one MP3 for your phone or MP3 player")
+                        .font(.system(size: 12))
+                        .opacity(0.85)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .opacity(0.7)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                LinearGradient(
+                    colors: [Color.accentColor, Color.accentColor.opacity(0.85)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 12)
+            )
+            .shadow(color: Color.accentColor.opacity(0.35), radius: 12, y: 4)
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
     }
 
     private var playerCard: some View {
