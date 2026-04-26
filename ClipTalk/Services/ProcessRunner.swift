@@ -63,6 +63,37 @@ struct ProcessRunner {
         }
     }
 
+    /// Like `run`, but retries on transient failures — specifically YouTube's
+    /// HTTP 429 (Too Many Requests), which yt-dlp surfaces as a regular
+    /// non-zero exit with "429" in stderr. Linear backoff: 5s, 15s, 30s.
+    /// Returns the last result regardless of success.
+    static func runWithRetry(
+        executable: String,
+        args: [String],
+        extraPATH: [String] = ["/usr/local/bin", "/opt/homebrew/bin"],
+        attempts: Int = 3
+    ) async -> Result {
+        let waits: [UInt64] = [5_000_000_000, 15_000_000_000, 30_000_000_000]
+        var last: Result = Result(status: -1, stdout: "", stderr: "no attempts")
+        for i in 0..<max(1, attempts) {
+            let r = await run(executable: executable, args: args, extraPATH: extraPATH)
+            last = r
+            if r.ok { return r }
+            // Only retry on rate-limit-shaped errors. Anything else is
+            // probably a real failure (bad URL, missing video, etc.).
+            let combined = (r.stderr + r.stdout).lowercased()
+            let rateLimited = combined.contains("http error 429")
+                || combined.contains("too many requests")
+                || combined.contains("rate limit")
+            if !rateLimited { return r }
+            if i < attempts - 1 {
+                NSLog("[ProcessRunner] 429 detected, retrying in \(waits[min(i, waits.count-1)] / 1_000_000_000)s")
+                try? await Task.sleep(nanoseconds: waits[min(i, waits.count - 1)])
+            }
+        }
+        return last
+    }
+
     /// First existing executable path wins. Lookup order:
     ///   1. ~/Library/Application Support/ClipTalk/bin/  (auto-updated yt-dlp lives here)
     ///   2. ClipTalk.app/Contents/Resources/bin/        (the bundled copy that ships with the app)

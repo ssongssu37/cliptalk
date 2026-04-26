@@ -76,7 +76,7 @@ private struct SidebarFooter: View {
                 .padding(.vertical, 6)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.plain).pointerCursor()
     }
 
     private func refresh() {

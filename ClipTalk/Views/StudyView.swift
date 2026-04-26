@@ -141,7 +141,7 @@ struct StudyView: View {
             .shadow(color: Color.accentColor.opacity(0.35), radius: 12, y: 4)
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.plain).pointerCursor()
     }
 
     private var playerCard: some View {
@@ -169,7 +169,7 @@ struct StudyView: View {
                 }
                 .frame(width: 124, height: 124)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.plain).pointerCursor()
 
             // Scrubber
             Scrubber(
@@ -231,7 +231,7 @@ struct StudyView: View {
             .background(highlight ? Color.accentColor : Color.clear)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.plain).pointerCursor()
         .disabled(vm.currentBit == nil && label != "Next")
     }
 
@@ -335,7 +335,7 @@ struct StudyView: View {
                     .frame(width: 22, height: 22)
                     .background(Circle().fill(Color.accentColor))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.plain).pointerCursor()
 
             Button {
                 vm.playBit(id: bit.id)
@@ -348,7 +348,7 @@ struct StudyView: View {
                     .multilineTextAlignment(.leading)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.plain).pointerCursor()
 
             if vm.favorites.contains(bit.id) {
                 Image(systemName: "bookmark.fill")
@@ -365,7 +365,7 @@ struct StudyView: View {
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.plain).pointerCursor()
             .help("Trim this clip")
 
             Button {
@@ -377,7 +377,7 @@ struct StudyView: View {
                     .frame(width: 22, height: 22)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.plain).pointerCursor()
             .help("Remove from playlist")
         }
         .padding(.horizontal, 12)

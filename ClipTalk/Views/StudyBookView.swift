@@ -104,7 +104,7 @@ private struct StudyBookRow: View {
                         Circle().fill(isPlaying ? Color.accentColor.opacity(0.7) : Color.accentColor)
                     )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.plain).pointerCursor()
             .help(isPlaying ? "Pause" : "Play")
 
             Text(rowText)
@@ -122,7 +122,7 @@ private struct StudyBookRow: View {
                     .frame(width: 20, height: 20)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.plain).pointerCursor()
             .help("Remove")
         }
         .padding(12)

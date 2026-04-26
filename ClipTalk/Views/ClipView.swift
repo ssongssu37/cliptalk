@@ -83,7 +83,7 @@ struct ClipView: View {
                         .padding(.vertical, 12)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.plain).pointerCursor()
             }
             .background(
                 RoundedRectangle(cornerRadius: 8)
@@ -302,7 +302,7 @@ private struct HistoryRow: View {
                         )
                     )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.plain).pointerCursor()
             .disabled(!hasMP3)
             .help(hasMP3 ? (isPlaying ? "Pause" : "Play") : "No audio for this entry")
 
@@ -344,7 +344,7 @@ private struct HistoryRow: View {
                         .frame(width: 22, height: 22)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.plain).pointerCursor()
                 .help("Trim this clip")
             }
 
@@ -357,7 +357,7 @@ private struct HistoryRow: View {
                     .frame(width: 20, height: 20)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.plain).pointerCursor()
             .help("Remove from history")
         }
         .padding(12)

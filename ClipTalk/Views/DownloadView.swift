@@ -92,7 +92,7 @@ struct DownloadView: View {
                         .padding(.vertical, 12)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.plain).pointerCursor()
             }
             .background(
                 RoundedRectangle(cornerRadius: 8)
@@ -248,7 +248,7 @@ private struct DownloadHistoryRow: View {
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.plain).pointerCursor()
                         }
                     }
                 }
@@ -264,7 +264,7 @@ private struct DownloadHistoryRow: View {
                     .frame(width: 20, height: 20)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.plain).pointerCursor()
             .help("Remove from history")
         }
         .padding(12)

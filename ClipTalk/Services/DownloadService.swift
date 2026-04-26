@@ -66,7 +66,7 @@ struct DownloadService {
                 "-o", outTemplate,
                 url,
             ]
-            let r = await ProcessRunner.run(executable: ytdlp, args: args)
+            let r = await ProcessRunner.runWithRetry(executable: ytdlp, args: args)
             if !r.ok {
                 throw DownloadError.ytdlpFailed(summarizeStderr(r.stderr))
             }
@@ -90,7 +90,7 @@ struct DownloadService {
                 "-o", outTemplate,
                 url,
             ]
-            let r = await ProcessRunner.run(executable: ytdlp, args: args)
+            let r = await ProcessRunner.runWithRetry(executable: ytdlp, args: args)
             if !r.ok {
                 throw DownloadError.ytdlpFailed(summarizeStderr(r.stderr))
             }

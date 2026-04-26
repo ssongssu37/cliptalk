@@ -268,7 +268,7 @@ private struct ArrowControl: View {
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.plain).pointerCursor()
         .disabled(!enabled)
     }
 }

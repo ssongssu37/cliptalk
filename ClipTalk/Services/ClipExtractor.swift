@@ -171,7 +171,7 @@ struct ClipExtractor {
         defer { try? FileManager.default.removeItem(at: tmp) }
 
         let outTemplate = "\(tmp.path)/vid.%(ext)s"
-        let capResult = await ProcessRunner.run(executable: ytdlp, args: [
+        let capResult = await ProcessRunner.runWithRetry(executable: ytdlp, args: [
             "--skip-download",
             "--write-subs", "--write-auto-subs",
             "--sub-langs", "en.*,en",
@@ -197,7 +197,7 @@ struct ClipExtractor {
         let index = CaptionIndex.build(from: cues)
 
         // 2. Video title (used for filename).
-        let titleResult = await ProcessRunner.run(executable: ytdlp, args: [
+        let titleResult = await ProcessRunner.runWithRetry(executable: ytdlp, args: [
             "--get-title", "--no-playlist", url,
         ])
         let title = titleResult.ok
@@ -205,7 +205,7 @@ struct ClipExtractor {
             : "clip"
 
         // 3. Direct audio stream URL (signed, ~6h TTL).
-        let urlResult = await ProcessRunner.run(executable: ytdlp, args: [
+        let urlResult = await ProcessRunner.runWithRetry(executable: ytdlp, args: [
             "-f", "bestaudio", "--get-url", "--no-playlist", url,
         ])
         if !urlResult.ok {
