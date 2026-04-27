@@ -211,21 +211,68 @@ extension CaptionIndex {
     /// Uses `.rfind` — auto-captions often restate text as the commentator
     /// speaks, and the final/cleanest match tends to be the last occurrence.
     func findRange(query: String) -> ClipRange? {
-        let normQuery = Self.normalizeStatic(query)
+        let cleaned = Self.stripTranscriptMarkers(query)
+        let normQuery = Self.normalizeStatic(cleaned)
         guard !normQuery.isEmpty else { return nil }
 
-        // Swift has no rfind; walk ranges manually.
+        // 1. Fast path: whole query matches verbatim.
+        if let r = lastRange(of: normQuery) {
+            return rangeFromMatch(r)
+        }
+
+        // 2. Fallback: anchor START with progressively shorter prefixes, END
+        // with progressively shorter suffixes. Auto-captions diverge from the
+        // transcript-panel text in tricky ways (proper nouns, self-corrections,
+        // "uh"s, rolling-caption dedup) — shorter anchors are more forgiving.
+        let words = normQuery.split(separator: " ").map(String.init)
+        guard words.count >= 2 else { return nil }
+
+        // Find the longest matching prefix.
+        var startMatch: Range<String.Index>? = nil
+        var matchedPrefixLen = 0
+        for n in stride(from: min(words.count, 12), through: 2, by: -1) {
+            let prefix = words.prefix(n).joined(separator: " ")
+            if let r = lastRange(of: prefix) {
+                startMatch = r
+                matchedPrefixLen = n
+                break
+            }
+        }
+        guard let startR = startMatch else { return nil }
+
+        // Search for the longest matching suffix that appears AFTER the prefix.
+        let searchStart = bigText.index(after: startR.lowerBound)
+        let remaining = words.dropFirst(matchedPrefixLen)
+        var endMatch: Range<String.Index>? = nil
+        for n in stride(from: min(remaining.count, 12), through: 2, by: -1) {
+            let suffix = remaining.suffix(n).joined(separator: " ")
+            if let r = bigText.range(of: suffix, range: searchStart..<bigText.endIndex) {
+                endMatch = r
+                break
+            }
+        }
+        if let endR = endMatch {
+            return rangeFromMatch(startR.lowerBound..<endR.upperBound)
+        }
+        // No suffix anchor — use the prefix match alone.
+        return rangeFromMatch(startR)
+    }
+
+    /// Walks the big text and returns the LAST occurrence of `needle`.
+    private func lastRange(of needle: String) -> Range<String.Index>? {
         var searchRange = bigText.startIndex..<bigText.endIndex
-        var lastMatch: Range<String.Index>? = nil
-        while let r = bigText.range(of: normQuery, options: [], range: searchRange) {
-            lastMatch = r
+        var last: Range<String.Index>? = nil
+        while let r = bigText.range(of: needle, options: [], range: searchRange) {
+            last = r
             searchRange = bigText.index(after: r.lowerBound)..<bigText.endIndex
         }
-        guard let match = lastMatch else { return nil }
+        return last
+    }
 
+    private func rangeFromMatch(_ match: Range<String.Index>) -> ClipRange? {
         let startChar = bigText.distance(from: bigText.startIndex, to: match.lowerBound)
         let endChar = bigText.distance(from: bigText.startIndex, to: match.upperBound) - 1
-        guard startChar < charToCue.count, endChar < charToCue.count else { return nil }
+        guard startChar < charToCue.count, endChar < charToCue.count, endChar >= 0 else { return nil }
 
         let startCue = cues[charToCue[startChar]]
         let endCue = cues[charToCue[endChar]]
@@ -261,6 +308,38 @@ extension CaptionIndex {
         let rawLen = max(1, cue.text.count)
         let frac = min(max(Double(charPos) / Double(rawLen), 0), 1)
         return cue.start + (cue.end - cue.start) * frac
+    }
+
+    /// Strip YouTube transcript-panel artifacts from a selection:
+    ///   - Visible timestamps:           "5:14", "1:02:33"
+    ///   - Screen-reader equivalents:    "5 minutes, 14 seconds"
+    ///                                   "1 hour, 2 minutes, 33 seconds"
+    /// These show up because YouTube renders both the visible timestamp AND
+    /// its accessibility label, and a text selection grabs both.
+    static func stripTranscriptMarkers(_ s: String) -> String {
+        var out = s
+        // YouTube's transcript panel selection looks like:
+        //   "5:265 minutes, 26 secondsAndover still in control..."
+        //   "1:02:331 hour, 2 minutes, 33 secondsRickley on the faceoff..."
+        // Visible timestamp + screen-reader label glued together with no
+        // spaces. The last digit of the timestamp fuses into the first digit
+        // of the readout, so we must match them as one combined unit.
+        let combinedRE = try! NSRegularExpression(
+            pattern: #"\d{1,2}:\d{2}(?::\d{2})?(?:\s*\d+\s*(?:hours?|minutes?|seconds?),?)+"#,
+            options: [.caseInsensitive]
+        )
+        // Also handle stray bare timestamps and bare a11y readouts in case
+        // either appears alone.
+        let bareTimestampRE = try! NSRegularExpression(pattern: #"\d{1,2}:\d{2}(?::\d{2})?"#)
+        let bareA11yRE = try! NSRegularExpression(
+            pattern: #"\d+\s*(?:hours?|minutes?|seconds?),?"#,
+            options: [.caseInsensitive]
+        )
+        for re in [combinedRE, bareTimestampRE, bareA11yRE] {
+            let range = NSRange(out.startIndex..., in: out)
+            out = re.stringByReplacingMatches(in: out, range: range, withTemplate: " ")
+        }
+        return out
     }
 
     // Single source of truth for normalization (used in build + findRange).

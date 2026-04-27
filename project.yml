@@ -14,8 +14,8 @@ settings:
   base:
     SWIFT_VERSION: "5.10"
     MACOSX_DEPLOYMENT_TARGET: "13.0"
-    MARKETING_VERSION: "0.1.2"
-    CURRENT_PROJECT_VERSION: "3"
+    MARKETING_VERSION: "0.1.3"
+    CURRENT_PROJECT_VERSION: "4"
     DEVELOPMENT_TEAM: N999F5MRQC
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: "Apple Development"
@@ -45,8 +45,8 @@ targets:
         CFBundleName: ClipTalk
         CFBundleDisplayName: ClipTalk
         CFBundleIdentifier: com.sunghun.ClipTalk
-        CFBundleShortVersionString: "0.1.2"
-        CFBundleVersion: "3"
+        CFBundleShortVersionString: "0.1.3"
+        CFBundleVersion: "4"
         LSMinimumSystemVersion: "13.0"
         NSHighResolutionCapable: YES
         NSAppTransportSecurity:

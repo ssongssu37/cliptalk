@@ -189,7 +189,11 @@ final class ClipViewModel: ObservableObject {
 
     func extractClip() {
         let url = urlInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        let query = clipQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Strip YouTube transcript-panel artifacts (visible timestamps fused
+        // with screen-reader labels like "5:265 minutes, 26 secondsAndover").
+        let cleaned = CaptionIndex.stripTranscriptMarkers(clipQuery)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        let query = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !url.isEmpty else {
             flash("Paste a YouTube URL first", isError: true)
             return

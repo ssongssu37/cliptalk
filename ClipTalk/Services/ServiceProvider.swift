@@ -10,6 +10,33 @@ import Foundation
 /// URL and hand off to QuickClipper.
 final class ServiceProvider: NSObject {
 
+    /// Tracks the most recent non-ClipTalk app that was frontmost. Updated by
+    /// the workspace observer set up in `init`. Used to restore focus to the
+    /// browser after the Services framework activates ClipTalk.
+    private var lastForeignApp: NSRunningApplication?
+
+    override init() {
+        super.init()
+        let nc = NSWorkspace.shared.notificationCenter
+        nc.addObserver(self,
+                       selector: #selector(workspaceDidActivate(_:)),
+                       name: NSWorkspace.didActivateApplicationNotification,
+                       object: nil)
+        // Seed with whoever's frontmost right now (typically the launcher
+        // before our window comes up — fine; will be replaced on first switch).
+        if let front = NSWorkspace.shared.frontmostApplication,
+           front.bundleIdentifier != Bundle.main.bundleIdentifier {
+            lastForeignApp = front
+        }
+    }
+
+    @objc private func workspaceDidActivate(_ note: Notification) {
+        guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+        if app.bundleIdentifier != Bundle.main.bundleIdentifier {
+            lastForeignApp = app
+        }
+    }
+
     /// Service: highlight a YouTube URL anywhere → right-click → Download from
     /// ClipTalk. Pops a small picker so the user can choose MP3 / Transcript /
     /// Both, then runs `DownloadService` against the Download page's save folder.
@@ -72,19 +99,40 @@ final class ServiceProvider: NSObject {
             return
         }
 
+        // The Services framework has already activated ClipTalk by the time
+        // this handler runs, so frontmostApplication == self. Use the workspace
+        // observer's tracked previous app instead.
+        let previousApp = lastForeignApp
+
+        // Hand focus back to the browser without recreating ClipTalk's window.
+        // (Flipping activation policy works but causes SwiftUI to tear down and
+        // recreate the WindowGroup, resetting the window size and active page.)
+        NSApp.hide(nil)
+        if let previousApp, previousApp.bundleIdentifier != Bundle.main.bundleIdentifier {
+            previousApp.activate(options: [.activateIgnoringOtherApps])
+        }
+
         // Fetch URL on the main thread (AppleScript requires a run loop).
         DispatchQueue.main.async {
             let url: String
             do {
                 url = try URLFetcher.currentTabURL()
             } catch {
-                // Hand failure to QuickClipper as empty URL so user gets a
-                // notification explaining the problem.
                 QuickClipper.capture(text: text, url: "")
                 NSLog("[ClipTalk] URL fetch failed: \(error.localizedDescription)")
+                NSApp.hide(nil)
+                if let previousApp, previousApp.bundleIdentifier != Bundle.main.bundleIdentifier {
+                    previousApp.activate(options: [.activateIgnoringOtherApps])
+                }
                 return
             }
             QuickClipper.capture(text: text, url: url)
+            // Belt-and-suspenders: hide again in case the AppleScript URL
+            // fetch surfaced ClipTalk during execution.
+            NSApp.hide(nil)
+            if let previousApp, previousApp.bundleIdentifier != Bundle.main.bundleIdentifier {
+                previousApp.activate(options: [.activateIgnoringOtherApps])
+            }
         }
     }
 }

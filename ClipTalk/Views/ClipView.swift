@@ -6,11 +6,18 @@ struct ClipView: View {
     @StateObject private var rowPlayer = HistoryRowPlayer()
     @State private var editingBit: Bit?
 
+    // Pin state for the URL currently in the field. Reactive: changes when
+    // urlInput changes, when a pin completes, or when an unpin happens.
+    @State private var pinnedSize: Int64? = nil
+    @State private var pinning: Bool = false
+    @State private var pinError: String? = nil
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 header
                 urlSection
+                pinSourceSection
                 clipByTextPanel
                 if !vm.activeJobs.isEmpty {
                     activeJobsPanel
@@ -42,6 +49,14 @@ struct ClipView: View {
             }
         }
         .animation(.easeInOut(duration: 0.15), value: vm.toast)
+        .onAppear { refreshPinState() }
+        .onChange(of: vm.urlInput) { _ in refreshPinState() }
+    }
+
+    private func refreshPinState() {
+        let url = vm.urlInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        pinnedSize = url.isEmpty ? nil : SourceAudio.pinnedSize(for: url)
+        pinError = nil
     }
 
     // MARK: - Header
@@ -94,6 +109,94 @@ struct ClipView: View {
                     .strokeBorder(.separator, lineWidth: 1)
             )
         }
+    }
+
+    // MARK: - Pin source audio
+
+    private var pinSourceSection: some View {
+        let urlEmpty = vm.urlInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let isPinned = pinnedSize != nil
+        return HStack(spacing: 12) {
+            Image(systemName: isPinned ? "pin.fill" : "pin")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(isPinned ? Color.accentColor : Color.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(isPinned ? "Source pinned locally" : "Pin source audio")
+                    .font(.callout.weight(.medium))
+                Text(isPinned
+                     ? "Clips cut from the local file — zero YouTube traffic. \(formatSize(pinnedSize ?? 0))"
+                     : "Mining lots of bits from one video? Pin once, then every clip is offline-fast.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if pinning {
+                ProgressView().controlSize(.small)
+                Text("Downloading…").font(.footnote).foregroundStyle(.secondary)
+            } else if isPinned {
+                Button("Unpin") { unpinCurrent() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .pointerCursor()
+            } else {
+                Button("Pin") { pinCurrent() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(urlEmpty)
+                    .pointerCursor()
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(nsColor: .textBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(.separator, lineWidth: 1)
+        )
+        .overlay(alignment: .bottomLeading) {
+            if let pinError {
+                Text(pinError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 6)
+            }
+        }
+    }
+
+    private func pinCurrent() {
+        let url = vm.urlInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !url.isEmpty else { return }
+        pinning = true
+        pinError = nil
+        Task {
+            do {
+                try await SourceAudio.pin(url)
+                await MainActor.run {
+                    pinning = false
+                    refreshPinState()
+                }
+            } catch {
+                await MainActor.run {
+                    pinning = false
+                    pinError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func unpinCurrent() {
+        let url = vm.urlInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !url.isEmpty else { return }
+        SourceAudio.unpin(url)
+        refreshPinState()
+    }
+
+    private func formatSize(_ bytes: Int64) -> String {
+        let mb = Double(bytes) / 1_048_576.0
+        return String(format: "%.1f MB", mb)
     }
 
     // MARK: - Clip-by-text panel

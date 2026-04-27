@@ -89,9 +89,12 @@ struct ClipExtractor {
             throw ClipExtractorError.textNotFound(query)
         }
 
-        // Pad slightly so we don't clip words.
+        // Pad slightly so we don't clip words. Trim only a small amount off
+        // the end (caption cues consistently overshoot the spoken word by a
+        // beat or two — but not by seconds). Floor the duration so a tiny
+        // matched range doesn't go negative or get truncated.
         let start = max(0, range.start - 0.3)
-        var end = range.end + 0.5
+        var end = max(start + 0.5, range.end + 0.1)
         if let cap = maxDuration, end - start > cap {
             end = start + cap
         }
@@ -99,12 +102,16 @@ struct ClipExtractor {
 
         let outPath = outputURL(for: entry.title, start: start, end: end, saveFolder: saveFolder)
 
+        // Prefer the pinned local MP3 if the user has pinned this video —
+        // zero network calls per clip after the initial pin download.
+        let inputPath = SourceAudio.pinnedURL(for: url)?.path ?? entry.audioURL
+
         let result = await ProcessRunner.run(
             executable: ffmpeg,
             args: [
                 "-hide_banner", "-loglevel", "error",
                 "-ss", String(format: "%.3f", start),
-                "-i", entry.audioURL,
+                "-i", inputPath,
                 "-t", String(format: "%.3f", duration),
                 "-vn",
                 "-c:a", "libmp3lame",

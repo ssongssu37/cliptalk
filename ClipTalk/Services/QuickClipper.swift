@@ -21,7 +21,12 @@ enum QuickClipper {
     }
 
     private static func captureAsync(text rawText: String, url rawURL: String) async {
-        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Strip YouTube transcript-panel artifacts (visible timestamps and
+        // their fused screen-reader labels) before anything else. This keeps
+        // the history list, the saved .txt, and the caption query all clean.
+        let stripped = CaptionIndex.stripTranscriptMarkers(rawText)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        let text = stripped.trimmingCharacters(in: .whitespacesAndNewlines)
         let url = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !text.isEmpty else {

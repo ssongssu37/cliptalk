@@ -25,6 +25,15 @@ enum LibraryPaths {
         return dir
     }
 
+    /// Where pinned full-video MP3s live. The user opts in per-URL; once
+    /// pinned, ClipExtractor cuts from the local file instead of YouTube's
+    /// signed CDN URL — no network calls per clip.
+    static var pinnedDir: URL {
+        let dir = supportDir.appendingPathComponent("source-audio", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
     /// Untouched MP3 backups, snapshotted before the first trim so the user
     /// can restore the original audio later. Hidden so it doesn't show up
     /// when they open `bitsDir` in Finder.
